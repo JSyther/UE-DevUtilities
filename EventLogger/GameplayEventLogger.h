@@ -9,31 +9,33 @@ struct FGameplayEventEntry
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadOnly)
+    UPROPERTY(BlueprintReadOnly, Category = "Event")
     FString EventName;
 
-    UPROPERTY(BlueprintReadOnly)
+    UPROPERTY(BlueprintReadOnly, Category = "Event")
     FString Context;
 
-    UPROPERTY(BlueprintReadOnly)
+    UPROPERTY(BlueprintReadOnly, Category = "Event")
     float GameTime;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Event")
+    FDateTime RealTimestamp;
 
     FGameplayEventEntry() {}
 
-    FGameplayEventEntry(const FString& InName, const FString& InContext, float InTime)
-    : EventName(InName)
-    , Context(InContext)
-    , GameTime(InTime)
-    {}
+    FGameplayEventEntry(const FString& InName, const FString& InContext, float InGameTime)
+        : EventName(InName), Context(InContext), GameTime(InGameTime), RealTimestamp(FDateTime::UtcNow()) {}
 };
 
 /**
  * UGameplayEventLogger
  * --------------------
- * Logs gameplay-related events at runtime with timestamps.
- * Useful for QA, debugging, or postmortem analysis.
+ * A robust runtime logger component that records gameplay-related events with timestamps,
+ * supports filtering, exporting, and querying logs.
+ * 
+ * Designed for advanced QA, telemetry, debugging, and postmortem analysis.
  */
-UCLASS(ClassGroup=(DevTools), meta=(BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (DevTools), meta = (BlueprintSpawnableComponent))
 class YOURPROJECT_API UGameplayEventLogger : public UActorComponent
 {
     GENERATED_BODY()
@@ -41,23 +43,46 @@ class YOURPROJECT_API UGameplayEventLogger : public UActorComponent
 public:
     UGameplayEventLogger();
 
-    /** Logs an event with optional context info */
-    UFUNCTION(BlueprintCallable, Category="Event Logger")
+    /** Logs an event with optional context information. Thread-safe. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
     void LogEvent(const FString& EventName, const FString& Context = TEXT(""));
 
-    /** Clears the event log */
-    UFUNCTION(BlueprintCallable, Category="Event Logger")
+    /** Clears the entire event log. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
     void ClearLog();
 
-    /** Dumps the event log to Output Log */
-    UFUNCTION(BlueprintCallable, Category="Event Logger")
+    /** Dumps all logged events to the output log (console). */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
     void DumpLogToConsole() const;
 
-    /** Returns the internal array of all logged events */
-    UFUNCTION(BlueprintCallable, Category="Event Logger")
+    /** Exports the event log to a CSV file at the given path. Returns success. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
+    bool ExportLogToCSV(const FString& FilePath) const;
+
+    /** Returns all logged events as an array. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
     const TArray<FGameplayEventEntry>& GetEventLog() const;
 
+    /** Searches events by event name substring (case insensitive). Returns filtered array. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
+    TArray<FGameplayEventEntry> SearchEventsByName(const FString& SearchTerm) const;
+
+    /** Searches events by context substring (case insensitive). Returns filtered array. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
+    TArray<FGameplayEventEntry> SearchEventsByContext(const FString& SearchTerm) const;
+
+    /** Returns the count of logged events. */
+    UFUNCTION(BlueprintCallable, Category = "Event Logger")
+    int32 GetEventCount() const;
+
 protected:
+    /** Thread-safe storage of gameplay events. */
     UPROPERTY()
     TArray<FGameplayEventEntry> EventLog;
+
+    mutable FCriticalSection Mutex; // For thread safety
+
+private:
+    /** Internal helper to sanitize strings for CSV export. */
+    FString SanitizeForCSV(const FString& Input) const;
 };
